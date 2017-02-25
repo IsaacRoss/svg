@@ -22,6 +22,7 @@ type alias Model =
     , selectedTool : Tool
     , dragAction : Maybe DragAction
     , comparedShape : Maybe Shape
+    , shapeOrdering : Dict Int Int
     }
 
 
@@ -79,6 +80,7 @@ initialModel =
     , selectedTool = PointerTool
     , dragAction = Nothing
     , comparedShape = Nothing
+    , shapeOrdering = Dict.empty
     }
 
 

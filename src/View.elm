@@ -41,7 +41,9 @@ import Msg
             , BeginDrag
             , EndDrag
             , DeselectShape
+            , SelectedShapeAction
             )
+        , ShapeAction(..)
         )
 import Svg exposing (Svg, svg, rect, circle, g)
 import Svg.Attributes as SA
@@ -80,14 +82,19 @@ view model =
             ]
         , div
             [ class Pure.grid ]
-            [ sidebar model.mouse model.selectedTool
-            , drawingArea model.selectedShapeId model.shapes model.selectedTool model.mouse
+            [ sidebar model.selectedShapeId model.shapes model.mouse model.selectedTool
+            , drawingArea
+                model.selectedShapeId
+                model.shapes
+                model.selectedTool
+                model.mouse
+                model.shapeOrdering
             ]
         ]
 
 
-drawingArea : Maybe Int -> Dict Int Shape -> Tool -> MouseModel -> Html Msg
-drawingArea maybeSelectedShapeId shapesDict selectedTool mouse =
+drawingArea : Maybe Int -> Dict Int Shape -> Tool -> MouseModel -> Dict Int Int -> Html Msg
+drawingArea maybeSelectedShapeId shapesDict selectedTool mouse shapeOrdering =
     section
         [ class <| "drawing-area " ++ Pure.unit [ "7", "8" ] ]
         [ svg
@@ -95,15 +102,20 @@ drawingArea maybeSelectedShapeId shapesDict selectedTool mouse =
             , preserveAspectRatio "xMidYMin slice"
             , onClick (onDrawingAreaClick selectedTool mouse)
             ]
-            (viewShapes selectedTool maybeSelectedShapeId shapesDict)
+            (viewShapes selectedTool maybeSelectedShapeId shapesDict shapeOrdering)
         ]
 
 
-viewShapes : Tool -> Maybe Int -> Dict Int Shape -> List (Svg Msg)
-viewShapes selectedTool maybeSelectedShapeId shapesDict =
+viewShapes : Tool -> Maybe Int -> Dict Int Shape -> Dict Int Int -> List (Svg Msg)
+viewShapes selectedTool maybeSelectedShapeId shapesDict shapeOrdering =
     shapesDict
         |> Dict.map (viewShape selectedTool maybeSelectedShapeId)
         |> Dict.toList
+        |> List.sortBy
+            (\( id, _ ) ->
+                Dict.get id shapeOrdering
+                    |> Maybe.withDefault 0
+            )
         |> List.map Tuple.second
 
 
@@ -124,29 +136,6 @@ viewShape selectedTool maybeSelectedShapeId shapeId shape =
 
             Circle circleModel ->
                 viewCircle selectedTool selected shapeId circleModel
-
-
-dragHandleWidth : Int
-dragHandleWidth =
-    20
-
-
-dragHandle : ( Float, Float ) -> Svg Msg
-dragHandle ( x_, y_ ) =
-    rect
-        [ x <| toString x_
-        , y <| toString y_
-        , width (toString dragHandleWidth)
-        , height (toString dragHandleWidth)
-        , stroke "yellow"
-        , strokeWidth "2"
-        , strokeDasharray "4,4"
-        , fill "transparent"
-        , SA.class "selection-drag-handle"
-        , onMouseDownPreventingDefault <| BeginDrag DragResize
-        , onClickPreventingDefault <| NoOp
-        ]
-        []
 
 
 selectionAttributes : List (Svg.Attribute Msg)
@@ -190,16 +179,6 @@ viewRect selectedTool selected shapeId rectModel =
         g [] groupChildren
 
 
-onShapeClick : Tool -> Int -> List (Svg.Attribute Msg)
-onShapeClick selectedTool shapeId =
-    case selectedTool of
-        PointerTool ->
-            [ onClickPreventingDefault <| SelectShape shapeId ]
-
-        _ ->
-            []
-
-
 viewUnselectedRect : Tool -> Int -> RectModel -> Svg Msg
 viewUnselectedRect selectedTool shapeId rectModel =
     rect
@@ -210,7 +189,6 @@ viewUnselectedRect selectedTool shapeId rectModel =
          , stroke rectModel.stroke
          , strokeWidth (toString rectModel.strokeWidth)
          , fill rectModel.fill
-         , onClickPreventingDefault <| SelectShape shapeId
          ]
             ++ (onShapeClick selectedTool shapeId)
         )
@@ -245,6 +223,16 @@ viewCircle selectedTool selected shapeId circleModel =
         g [] groupChildren
 
 
+onShapeClick : Tool -> Int -> List (Svg.Attribute Msg)
+onShapeClick selectedTool shapeId =
+    case selectedTool of
+        PointerTool ->
+            [ onClickPreventingDefault <| SelectShape shapeId ]
+
+        _ ->
+            []
+
+
 viewUnselectedCircle : Tool -> Int -> CircleModel -> Svg Msg
 viewUnselectedCircle selectedTool shapeId circleModel =
     circle
@@ -254,65 +242,130 @@ viewUnselectedCircle selectedTool shapeId circleModel =
          , stroke circleModel.stroke
          , strokeWidth (toString circleModel.strokeWidth)
          , fill circleModel.fill
-         , onClickPreventingDefault <| SelectShape shapeId
          ]
             ++ (onShapeClick selectedTool shapeId)
         )
         []
 
 
-onClickPreventingDefault : Msg -> Svg.Attribute Msg
-onClickPreventingDefault msg =
-    onPreventingDefault "click" msg
+tools : List ( Tool, Html Msg )
+tools =
+    [ ( PointerTool, Icon.mouse_pointer )
+    , ( RectTool, Icon.square_o )
+    , ( CircleTool, Icon.circle_o )
+    ]
 
 
-sidebar : MouseModel -> Tool -> Html Msg
-sidebar mouse selectedTool =
-    section
-        [ class <| "sidebar " ++ Pure.unit [ "1", "8" ] ]
-        [ div
-            [ class "tools" ]
-            [ h3 [] [ text "Tools" ]
-            , ul []
-                [ li
-                    [ onClick <| SelectTool PointerTool
-                    , classList
-                        [ ( "selected"
-                          , selectedTool == PointerTool
-                          )
-                        ]
-                    ]
-                    [ Icon.mouse_pointer ]
-                , li
-                    [ onClick <| SelectTool RectTool
-                    , classList
-                        [ ( "selected"
-                          , selectedTool == RectTool
-                          )
-                        ]
-                    ]
-                    [ Icon.square_o ]
-                , li
-                    [ onClick <| SelectTool CircleTool
-                    , classList
-                        [ ( "selected"
-                          , selectedTool == CircleTool
-                          )
-                        ]
-                    ]
-                    [ Icon.circle_o ]
-                ]
+sidebarTool : Tool -> ( Tool, Html Msg ) -> Html Msg
+sidebarTool selectedTool ( tool, icon ) =
+    li
+        [ onClick <| SelectTool tool
+        , classList
+            [ ( "selected"
+              , selectedTool == tool
+              )
             ]
-        , h3 [] [ text "Mouse" ]
+        ]
+        [ icon ]
+
+
+sidebarTools : Tool -> Html Msg
+sidebarTools selectedTool =
+    div
+        [ class "tools" ]
+        [ h3 [] [ text "Tools" ]
+        , ul [ class "buttons" ] <|
+            List.map (sidebarTool selectedTool) tools
+        ]
+
+
+sidebarMouse : MouseModel -> Html Msg
+sidebarMouse mouse =
+    div []
+        [ h3 [] [ text "Mouse" ]
         , dl []
             [ dt [] [ text "Position" ]
             , dd [] [ text <| toString mouse.position ]
-            , dt [] [ text "Down?" ]
+            , dd [] [ text "Down?" ]
             , dd [] [ text <| toString mouse.down ]
-            , dt [] [ text "SVG Position" ]
+            , dd [] [ text <| "SVG Position" ]
             , dd [] [ text <| toString mouse.svgPosition ]
             ]
         ]
+
+
+shapeActions : List ( ShapeAction, Html Msg )
+shapeActions =
+    [ ( SendToBack, icon "fast-backward" )
+    , ( SendBackwards, icon "backward" )
+    , ( BringForward, icon "forward" )
+    , ( BringToFront, icon "fast-forward" )
+    ]
+
+
+sidebarSelectedShapeAction : ( ShapeAction, Html Msg ) -> Html Msg
+sidebarSelectedShapeAction ( shapeAction, icon ) =
+    li
+        [ onClick <| SelectedShapeAction shapeAction
+        ]
+        [ icon ]
+
+
+sidebarSelectedShapeActions : Maybe Int -> Dict Int Shape -> Html Msg
+sidebarSelectedShapeActions maybeSelectedShapeId shapes =
+    case maybeSelectedShapeId of
+        Nothing ->
+            text ""
+
+        Just selectedShapeId ->
+            case Dict.get selectedShapeId shapes of
+                Nothing ->
+                    text ""
+
+                Just selectedShapeId ->
+                    div []
+                        [ h3 [] [ text "Actions" ]
+                        , ul [ class "buttons actions" ] <|
+                            List.map sidebarSelectedShapeAction shapeActions
+                        ]
+
+
+sidebar : Maybe Int -> Dict Int Shape -> MouseModel -> Tool -> Html Msg
+sidebar maybeSelectedShapeId shapes mouse selectedTool =
+    section
+        [ class <| "sidebar " ++ Pure.unit [ "1", "8" ] ]
+        [ sidebarTools selectedTool
+        , sidebarSelectedShapeActions maybeSelectedShapeId shapes
+        , sidebarMouse mouse
+        ]
+
+
+dragHandleWidth : Int
+dragHandleWidth =
+    20
+
+
+dragHandle : ( Float, Float ) -> Svg Msg
+dragHandle ( x_, y_ ) =
+    rect
+        [ x <| toString x_
+        , y <| toString y_
+        , width (toString dragHandleWidth)
+        , height (toString dragHandleWidth)
+        , stroke "yellow"
+        , strokeWidth "2"
+        , strokeDasharray "4,4"
+        , fill "transparent"
+        , SA.class "selection-drag-handle"
+        , onMouseDownPreventingDefault <| BeginDrag DragResize
+        , onClickPreventingDefault <| NoOp
+        ]
+        []
+
+
+onClickPreventingDefault : Msg -> Svg.Attribute Msg
+onClickPreventingDefault msg =
+    onPreventingDefault "click" msg
 
 
 onDrawingAreaClick : Tool -> MouseModel -> Msg
@@ -360,3 +413,13 @@ onPreventingDefault event msg =
 onMouseDownPreventingDefault : Msg -> Svg.Attribute Msg
 onMouseDownPreventingDefault msg =
     onPreventingDefault "mousedown" msg
+
+
+icon : String -> Html.Html msg
+icon s =
+    Html.i [ class <| fontClass s ] []
+
+
+fontClass : String -> String
+fontClass =
+    String.append "fa fa-"

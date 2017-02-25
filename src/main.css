@@ -134,6 +134,19 @@ header p a {
   background: var(--tools-selected-background-color);
 }
 
+.sidebar ul.buttons {
+  margin:0;
+  padding: .25rem;
+  list-style: none;
+}
+
+.sidebar ul.buttons li {
+  padding: .25rem;
+  display:inline-block;
+  margin-right: .25rem;
+  cursor:pointer;
+}
+
 .selection {
   cursor: pointer;
 }

@@ -1,4 +1,4 @@
-module Msg exposing (Msg(..), ModifyShapeMsg(..))
+module Msg exposing (Msg(..), ModifyShapeMsg(..), ShapeAction(..))
 
 import Model exposing (Shape(..), Tool(..), SvgPosition)
 import Mouse
@@ -10,13 +10,21 @@ type Msg
     | MouseMove Mouse.Position
     | MouseDown Mouse.Position
     | MouseUp Mouse.Position
+    | DeselectShape
     | SelectShape Int
     | AddShape Shape
     | SelectTool Tool
     | MouseSvgMove SvgPosition
     | BeginDrag DragAction
     | EndDrag
-    | DeselectShape
+    | SelectedShapeAction ShapeAction
+
+
+type ShapeAction
+    = SendToBack
+    | SendBackwards
+    | BringForward
+    | BringToFront
 
 
 type ModifyShapeMsg
